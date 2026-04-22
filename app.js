@@ -402,7 +402,7 @@ app.action("open_image_info_modal", async ({ ack, body, client, logger }) => {
               action_id: "batch_input",
               placeholder: {
                 type: "plain_text",
-                text: "Enter numbers only",
+                text: "e.g. 001",
               },
             },
           },
@@ -440,11 +440,11 @@ app.view("submit_image_info", async ({ ack, view, client, logger }) => {
     const table = values.table_block.table_input.selected_option.value;
     const batchNumber = values.batch_block.batch_input.value.trim();
 
-    if (!/^[0-9]+$/.test(batchNumber)) {
+    if (!/^[0-9]{3}$/.test(batchNumber)) {
       await ack({
         response_action: "errors",
         errors: {
-          batch_block: "Batch must contain numbers only (do not include #)",
+          batch_block: "Batch must be exactly 3 digits (e.g. 001, 025)",
         },
       });
       return;
