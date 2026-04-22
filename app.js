@@ -396,10 +396,10 @@ app.action("open_image_info_modal", async ({ ack, body, client, logger }) => {
               text: "Batch",
             },
             element: {
-              type: "number_input",
-              is_decimal_allowed: false,
-              min_value: "0",
+              type: "plain_text_input",
               action_id: "batch_input",
+              min_length: 3,
+              max_length: 3,
               placeholder: {
                 type: "plain_text",
                 text: "e.g. 001",
