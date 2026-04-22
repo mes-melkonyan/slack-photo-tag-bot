@@ -426,20 +426,27 @@ app.action("open_image_info_modal", async ({ ack, body, client, logger }) => {
 
 app.view("submit_image_info", async ({ ack, view, client, logger }) => {
   try {
-    await ack();
-
     const meta = JSON.parse(view.private_metadata);
     const values = view.state.values;
 
     const date = values.date_block.date_input.selected_date;
     const room = values.room_block.room_input.selected_option.value;
     const table = values.table_block.table_input.selected_option.value;
-    const batch = values.batch_block.batch_input.value;
+    const batchNumber = values.batch_block.batch_input.value.trim();
 
-    if (!/^\d+$/.test(batch)) {
-      throw new Error("Batch must contain only numbers.");
+    if (!/^[0-9]+$/.test(batchNumber)) {
+      await ack({
+        response_action: "errors",
+        errors: {
+          batch_block: "Batch must contain numbers only (do not include #)"
+        }
+      });
+      return;
     }
 
+    await ack();
+
+    const batch = `#${batchNumber}`;
     const comment = values.comment_block?.comment_input?.value || "-";
 
     if (meta.reminderKey) {
