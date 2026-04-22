@@ -9,30 +9,12 @@ const app = new App({
 
 const ALLOWED_CHANNEL_ID = "C0AMQPF6XEV";
 
-/**
- * If the same user uploads multiple images in a short burst,
- * only post one form message.
- */
 const UPLOAD_BURST_WINDOW_MS = 8000;
 const recentUploadBursts = new Map();
 
-/**
- * Reminder timing
- */
-const FIRST_REMINDER_DELAY_MS = 3 * 60 * 1000; // 3 minutes
-const REPEATED_REMINDER_DELAY_MS = 30 * 60 * 1000; // 30 minutes
+const FIRST_REMINDER_DELAY_MS = 3 * 60 * 1000;
+const REPEATED_REMINDER_DELAY_MS = 30 * 60 * 1000;
 
-/**
- * Tracks pending forms by exact thread
- * reminderKey -> {
- *   uploaderUserId,
- *   channelId,
- *   threadTs,
- *   completed,
- *   firstReminderTimeout,
- *   repeatReminderInterval
- * }
- */
 const pendingForms = new Map();
 
 function getThreadTsFromFile(file, channelId) {
@@ -346,6 +328,7 @@ app.action("open_image_info_modal", async ({ ack, body, client, logger }) => {
               initial_date: getTodayDateString(),
             },
           },
+
           {
             type: "input",
             block_id: "room_block",
@@ -354,10 +337,24 @@ app.action("open_image_info_modal", async ({ ack, body, client, logger }) => {
               text: "Room",
             },
             element: {
-              type: "plain_text_input",
+              type: "static_select",
               action_id: "room_input",
+              placeholder: {
+                type: "plain_text",
+                text: "Select room",
+              },
+              options: [
+                { text: { type: "plain_text", text: "B1" }, value: "B1" },
+                { text: { type: "plain_text", text: "B2" }, value: "B2" },
+                { text: { type: "plain_text", text: "B3" }, value: "B3" },
+                { text: { type: "plain_text", text: "B4" }, value: "B4" },
+                { text: { type: "plain_text", text: "Mom" }, value: "Mom" },
+                { text: { type: "plain_text", text: "Veg" }, value: "Veg" },
+                { text: { type: "plain_text", text: "Water" }, value: "Water" },
+              ],
             },
           },
+
           {
             type: "input",
             block_id: "table_block",
@@ -390,6 +387,7 @@ app.action("open_image_info_modal", async ({ ack, body, client, logger }) => {
               ],
             },
           },
+
           {
             type: "input",
             block_id: "batch_block",
@@ -398,15 +396,11 @@ app.action("open_image_info_modal", async ({ ack, body, client, logger }) => {
               text: "Batch",
             },
             element: {
-              type: "static_select",
+              type: "plain_text_input",
               action_id: "batch_input",
-              placeholder: {
-                type: "plain_text",
-                text: "Select batch",
-              },
-              options: getBatchOptions(),
             },
           },
+
           {
             type: "input",
             optional: true,
@@ -438,9 +432,14 @@ app.view("submit_image_info", async ({ ack, view, client, logger }) => {
     const values = view.state.values;
 
     const date = values.date_block.date_input.selected_date;
-    const room = values.room_block.room_input.value;
+    const room = values.room_block.room_input.selected_option.value;
     const table = values.table_block.table_input.selected_option.value;
-    const batch = values.batch_block.batch_input.selected_option.value;
+    const batch = values.batch_block.batch_input.value;
+
+    if (!/^\d+$/.test(batch)) {
+      throw new Error("Batch must contain only numbers.");
+    }
+
     const comment = values.comment_block?.comment_input?.value || "-";
 
     if (meta.reminderKey) {
