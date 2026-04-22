@@ -396,8 +396,14 @@ app.action("open_image_info_modal", async ({ ack, body, client, logger }) => {
               text: "Batch",
             },
             element: {
-              type: "plain_text_input",
+              type: "number_input",
+              is_decimal_allowed: false,
+              min_value: "0",
               action_id: "batch_input",
+              placeholder: {
+                type: "plain_text",
+                text: "Enter numbers only",
+              },
             },
           },
 
@@ -438,8 +444,8 @@ app.view("submit_image_info", async ({ ack, view, client, logger }) => {
       await ack({
         response_action: "errors",
         errors: {
-          batch_block: "Batch must contain numbers only (do not include #)"
-        }
+          batch_block: "Batch must contain numbers only (do not include #)",
+        },
       });
       return;
     }
