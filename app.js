@@ -40,10 +40,7 @@ function getBatchOptions() {
   for (let i = 1; i <= 20; i++) {
     const value = String(i).padStart(3, "0");
     options.push({
-      text: {
-        type: "plain_text",
-        text: value,
-      },
+      text: { type: "plain_text", text: value },
       value,
     });
   }
@@ -80,23 +77,13 @@ function buildReminderKey({ channelId, threadTs }) {
 }
 
 async function sendReminderDM(client, formState) {
-  if (!formState || formState.completed) {
-    return;
-  }
-
-  if (!formState.uploaderUserId) {
-    console.error("Cannot send DM reminder: missing uploaderUserId");
-    return;
-  }
+  if (!formState || formState.completed) return;
+  if (!formState.uploaderUserId) return;
 
   try {
-    console.log("Opening DM for user:", formState.uploaderUserId);
-
     const dm = await client.conversations.open({
       users: formState.uploaderUserId,
     });
-
-    console.log("DM opened:", dm.channel.id);
 
     await client.chat.postMessage({
       channel: dm.channel.id,
@@ -104,8 +91,6 @@ async function sendReminderDM(client, formState) {
         `Reminder: please fill in the image information form for your upload in <#${formState.channelId}>.\n` +
         `Open thread: https://slack.com/app_redirect?channel=${formState.channelId}&message_ts=${formState.threadTs}`,
     });
-
-    console.log("DM reminder sent.");
   } catch (error) {
     console.error("DM reminder failed:", error?.data || error);
   }
@@ -113,18 +98,10 @@ async function sendReminderDM(client, formState) {
 
 function clearFormReminders(reminderKey) {
   const existing = pendingForms.get(reminderKey);
+  if (!existing) return;
 
-  if (!existing) {
-    return;
-  }
-
-  if (existing.firstReminderTimeout) {
-    clearTimeout(existing.firstReminderTimeout);
-  }
-
-  if (existing.repeatReminderInterval) {
-    clearInterval(existing.repeatReminderInterval);
-  }
+  if (existing.firstReminderTimeout) clearTimeout(existing.firstReminderTimeout);
+  if (existing.repeatReminderInterval) clearInterval(existing.repeatReminderInterval);
 
   pendingForms.delete(reminderKey);
 }
@@ -147,30 +124,16 @@ function scheduleFormReminders({
     repeatReminderInterval: null,
   };
 
-  console.log("Scheduling first reminder for:", {
-    reminderKey,
-    uploaderUserId,
-    channelId,
-    threadTs,
-  });
-
   formState.firstReminderTimeout = setTimeout(async () => {
     const current = pendingForms.get(reminderKey);
-    if (!current || current.completed) {
-      return;
-    }
-
-    console.log("First reminder timer fired for:", reminderKey);
+    if (!current || current.completed) return;
 
     await sendReminderDM(client, current);
 
     current.repeatReminderInterval = setInterval(async () => {
       const latest = pendingForms.get(reminderKey);
-      if (!latest || latest.completed) {
-        return;
-      }
+      if (!latest || latest.completed) return;
 
-      console.log("Repeated reminder timer fired for:", reminderKey);
       await sendReminderDM(client, latest);
     }, REPEATED_REMINDER_DELAY_MS);
   }, FIRST_REMINDER_DELAY_MS);
@@ -180,64 +143,35 @@ function scheduleFormReminders({
 
 app.event("file_shared", async ({ event, client, logger }) => {
   try {
-    console.log("file_shared event received:", JSON.stringify(event, null, 2));
-
-    const fileInfo = await client.files.info({
-      file: event.file_id,
-    });
-
+    const fileInfo = await client.files.info({ file: event.file_id });
     const file = fileInfo.file;
 
-    if (!file || !file.mimetype || !file.mimetype.startsWith("image/")) {
-      console.log("Ignored because not an image:", file?.mimetype);
-      return;
-    }
+    if (!file || !file.mimetype?.startsWith("image/")) return;
 
     const shares = file?.shares || {};
     const publicChannelIds = Object.keys(shares.public || {});
     const privateChannelIds = Object.keys(shares.private || {});
     const allChannelIds = [...publicChannelIds, ...privateChannelIds];
 
-    if (!allChannelIds.includes(ALLOWED_CHANNEL_ID)) {
-      console.log("Ignored because wrong channel. Shared in:", allChannelIds);
-      return;
-    }
+    if (!allChannelIds.includes(ALLOWED_CHANNEL_ID)) return;
 
     const channelId = ALLOWED_CHANNEL_ID;
     const threadTs = getThreadTsFromFile(file, channelId);
 
     if (!threadTs) {
-      console.log("Could not determine thread ts for file:", event.file_id);
-
       await client.chat.postMessage({
         channel: channelId,
         text: "I found the image, but could not attach the form to the image thread.",
       });
-
       return;
     }
 
     const uploaderUserId = file.user || event.user_id;
+    if (!uploaderUserId) return;
 
-    if (!uploaderUserId) {
-      console.log("No uploader user ID found. Skipping reminder setup.");
-      return;
-    }
+    if (shouldSkipBurstMessage({ channelId, userId: uploaderUserId })) return;
 
-    if (
-      shouldSkipBurstMessage({
-        channelId,
-        userId: uploaderUserId,
-      })
-    ) {
-      console.log("Skipped duplicate burst message for:", uploaderUserId);
-      return;
-    }
-
-    const reminderKey = buildReminderKey({
-      channelId,
-      threadTs,
-    });
+    const reminderKey = buildReminderKey({ channelId, threadTs });
 
     await client.chat.postMessage({
       channel: channelId,
@@ -256,10 +190,7 @@ app.event("file_shared", async ({ event, client, logger }) => {
           elements: [
             {
               type: "button",
-              text: {
-                type: "plain_text",
-                text: "Enter image info",
-              },
+              text: { type: "plain_text", text: "Enter image info" },
               action_id: "open_image_info_modal",
               value: JSON.stringify({
                 channelId,
@@ -281,11 +212,7 @@ app.event("file_shared", async ({ event, client, logger }) => {
       channelId,
       threadTs,
     });
-
-    console.log("Posted button message to thread:", threadTs);
-    console.log("Reminders scheduled successfully for reminderKey:", reminderKey);
   } catch (error) {
-    console.error("file_shared handler error:", error);
     logger.error(error);
   }
 });
@@ -293,7 +220,6 @@ app.event("file_shared", async ({ event, client, logger }) => {
 app.action("open_image_info_modal", async ({ ack, body, client, logger }) => {
   try {
     await ack();
-
     const data = JSON.parse(body.actions[0].value);
 
     await client.views.open({
@@ -302,47 +228,28 @@ app.action("open_image_info_modal", async ({ ack, body, client, logger }) => {
         type: "modal",
         callback_id: "submit_image_info",
         private_metadata: JSON.stringify(data),
-        title: {
-          type: "plain_text",
-          text: "Image info",
-        },
-        submit: {
-          type: "plain_text",
-          text: "Save",
-        },
-        close: {
-          type: "plain_text",
-          text: "Cancel",
-        },
+        title: { type: "plain_text", text: "Image info" },
+        submit: { type: "plain_text", text: "Save" },
+        close: { type: "plain_text", text: "Cancel" },
         blocks: [
           {
             type: "input",
             block_id: "date_block",
-            label: {
-              type: "plain_text",
-              text: "Date",
-            },
+            label: { type: "plain_text", text: "Date" },
             element: {
               type: "datepicker",
               action_id: "date_input",
               initial_date: getTodayDateString(),
             },
           },
-
           {
             type: "input",
             block_id: "room_block",
-            label: {
-              type: "plain_text",
-              text: "Room",
-            },
+            label: { type: "plain_text", text: "Room" },
             element: {
               type: "static_select",
               action_id: "room_input",
-              placeholder: {
-                type: "plain_text",
-                text: "Select room",
-              },
+              placeholder: { type: "plain_text", text: "Select room" },
               options: [
                 { text: { type: "plain_text", text: "B1" }, value: "B1" },
                 { text: { type: "plain_text", text: "B2" }, value: "B2" },
@@ -354,67 +261,38 @@ app.action("open_image_info_modal", async ({ ack, body, client, logger }) => {
               ],
             },
           },
-
           {
             type: "input",
             block_id: "table_block",
-            label: {
-              type: "plain_text",
-              text: "Table",
-            },
+            label: { type: "plain_text", text: "Table" },
             element: {
               type: "static_select",
               action_id: "table_input",
-              placeholder: {
-                type: "plain_text",
-                text: "Select table",
-              },
+              placeholder: { type: "plain_text", text: "Select table" },
               options: [
-                {
-                  text: {
-                    type: "plain_text",
-                    text: "Left",
-                  },
-                  value: "Left",
-                },
-                {
-                  text: {
-                    type: "plain_text",
-                    text: "Right",
-                  },
-                  value: "Right",
-                },
+                { text: { type: "plain_text", text: "Left" }, value: "Left" },
+                { text: { type: "plain_text", text: "Right" }, value: "Right" },
+                { text: { type: "plain_text", text: "Both" }, value: "Both" }, // ← NEU
               ],
             },
           },
-
           {
             type: "input",
             block_id: "batch_block",
-            label: {
-              type: "plain_text",
-              text: "Batch",
-            },
+            label: { type: "plain_text", text: "Batch" },
             element: {
               type: "plain_text_input",
               action_id: "batch_input",
               min_length: 3,
               max_length: 3,
-              placeholder: {
-                type: "plain_text",
-                text: "e.g. 001",
-              },
+              placeholder: { type: "plain_text", text: "e.g. 001" },
             },
           },
-
           {
             type: "input",
             optional: true,
             block_id: "comment_block",
-            label: {
-              type: "plain_text",
-              text: "Additional Comment",
-            },
+            label: { type: "plain_text", text: "Additional Comment" },
             element: {
               type: "plain_text_input",
               multiline: true,
@@ -425,7 +303,6 @@ app.action("open_image_info_modal", async ({ ack, body, client, logger }) => {
       },
     });
   } catch (error) {
-    console.error("open_image_info_modal error:", error?.data || error);
     logger.error(error);
   }
 });
@@ -455,9 +332,7 @@ app.view("submit_image_info", async ({ ack, view, client, logger }) => {
     const batch = `#${batchNumber}`;
     const comment = values.comment_block?.comment_input?.value || "-";
 
-    if (meta.reminderKey) {
-      clearFormReminders(meta.reminderKey);
-    }
+    if (meta.reminderKey) clearFormReminders(meta.reminderKey);
 
     await client.chat.postMessage({
       channel: meta.channelId,
@@ -471,7 +346,6 @@ app.view("submit_image_info", async ({ ack, view, client, logger }) => {
         `Additional Comment: ${comment}`,
     });
   } catch (error) {
-    console.error("submit_image_info error:", error?.data || error);
     logger.error(error);
   }
 });
