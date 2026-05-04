@@ -112,6 +112,7 @@ function scheduleFormReminders({
   uploaderUserId,
   channelId,
   threadTs,
+  fileId,
 }) {
   clearFormReminders(reminderKey);
 
@@ -119,6 +120,7 @@ function scheduleFormReminders({
     uploaderUserId,
     channelId,
     threadTs,
+    fileId,
     completed: false,
     firstReminderTimeout: null,
     repeatReminderInterval: null,
@@ -211,7 +213,28 @@ app.event("file_shared", async ({ event, client, logger }) => {
       uploaderUserId,
       channelId,
       threadTs,
+      fileId: event.file_id,
     });
+  } catch (error) {
+    logger.error(error);
+  }
+});
+
+app.event("file_deleted", async ({ event, logger }) => {
+  try {
+    const deletedFileId = event.file_id || event.file?.id;
+
+    if (!deletedFileId) {
+      console.log("file_deleted event received without file ID:", event);
+      return;
+    }
+
+    for (const [reminderKey, formState] of pendingForms.entries()) {
+      if (formState.fileId === deletedFileId) {
+        console.log("Clearing reminders because file was deleted:", deletedFileId);
+        clearFormReminders(reminderKey);
+      }
+    }
   } catch (error) {
     logger.error(error);
   }
