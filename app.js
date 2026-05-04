@@ -193,7 +193,20 @@ app.event("file_shared", async ({ event, client, logger }) => {
             {
               type: "button",
               text: { type: "plain_text", text: "Enter image info" },
+              style: "primary",
               action_id: "open_image_info_modal",
+              value: JSON.stringify({
+                channelId,
+                fileId: event.file_id,
+                threadTs,
+                uploaderUserId,
+                reminderKey,
+              }),
+            },
+            {
+              type: "button",
+              text: { type: "plain_text", text: "No info available" },
+              action_id: "mark_no_info_available",
               value: JSON.stringify({
                 channelId,
                 fileId: event.file_id,
@@ -324,6 +337,26 @@ app.action("open_image_info_modal", async ({ ack, body, client, logger }) => {
           },
         ],
       },
+    });
+  } catch (error) {
+    logger.error(error);
+  }
+});
+
+app.action("mark_no_info_available", async ({ ack, body, client, logger }) => {
+  try {
+    await ack();
+
+    const data = JSON.parse(body.actions[0].value);
+
+    if (data.reminderKey) {
+      clearFormReminders(data.reminderKey);
+    }
+
+    await client.chat.postMessage({
+      channel: data.channelId,
+      thread_ts: data.threadTs,
+      text: "Image info marked as not available.",
     });
   } catch (error) {
     logger.error(error);
